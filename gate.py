@@ -30,7 +30,7 @@ import json
 import os
 import sys
 
-from checks import l1_schema, l4_numeric, l6_reachability, l8_provenance
+from checks import Finding, l1_schema, l4_numeric, l6_reachability, l8_provenance
 
 CHECKS = [l1_schema, l4_numeric, l6_reachability, l8_provenance]
 
@@ -74,11 +74,12 @@ def main(argv=None):
         try:
             findings.extend(module.run(cards, ctx))
             checks_run += 1
-        except Exception:
-            # One malformed row should not take the whole gate down and block a
-            # release. Carry on with the checks that can still run.
-            checks_run += 1
-            continue
+        except Exception as exc:
+            # A crashed check has vouched for nothing: every finding it had
+            # already collected is lost. Fail closed — record the crash as an
+            # error so the gate can never PASS on data it did not finish checking.
+            findings.append(Finding("error", module.NAME, "<gate>", "",
+                                    f"check crashed without finishing: {exc!r}"))
 
     errors = [f for f in findings if f.level == "error"]
     warns = [f for f in findings if f.level == "warn"]

@@ -16,6 +16,10 @@ TITLE = "engine reachability"
 def run(cards, ctx):
     out = []
     vocabulary = ctx["categories"]
+    if vocabulary is None:
+        # No app checkout (every scheduled CI run). Documented as non-fatal:
+        # skip the check rather than crash.
+        return out
     known = {c.lower() for c in vocabulary}
 
     for entry in cards:

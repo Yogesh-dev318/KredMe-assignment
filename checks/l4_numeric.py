@@ -37,6 +37,11 @@ def run(cards, ctx):
             rate = rule.get("reward_rate")
             rtype = rule.get("reward_type")
 
+            if rtype in ("cashback_pct", "points_per_spend", "multiplier") and not isinstance(rate, (int, float)):
+                out.append(Finding("error", NAME, name, rname,
+                                   f"reward_rate is {rate!r} — not a number, so its size cannot be judged"))
+                continue
+
             if rtype == "cashback_pct":
                 if rate > MAX_CASHBACK_FRACTION:
                     out.append(Finding("error", NAME, name, rname,
@@ -45,6 +50,10 @@ def run(cards, ctx):
 
             elif rtype == "points_per_spend":
                 unit = rule.get("reward_unit_spend")
+                if not isinstance(unit, (int, float)) or not unit:
+                    out.append(Finding("error", NAME, name, rname,
+                                       f"reward_unit_spend is {unit!r} — the rate cannot be normalised"))
+                    continue
                 per_rupee = rate / unit
                 if per_rupee > MAX_POINTS_PER_RUPEE:
                     out.append(Finding("error", NAME, name, rname,

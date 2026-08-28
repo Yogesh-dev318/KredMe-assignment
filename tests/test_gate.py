@@ -51,11 +51,38 @@ def test_l8_flags_an_aggregator_source():
     assert any("aggregator" in f.message for f in findings)
 
 
-def test_gate_exit_code_is_zero_when_the_catalogue_is_clean():
+def test_l4_reports_bad_rows_even_when_a_later_rule_is_malformed():
+    # Regression for the Altura incident: a string reward_rate on one card used
+    # to crash L4 mid-run, silently discarding the 200%-cashback error it had
+    # already found on an earlier card.
+    cards = [
+        {"card": {"card_name": "Altura-like", "base_reward_rate": 0.01},
+         "reward_rules": [{"rule_name": "200% back", "reward_type": "cashback_pct", "reward_rate": 2.0}]},
+        {"card": {"card_name": "Scapia-like", "base_reward_rate": 0.01},
+         "reward_rules": [{"rule_name": "string rate", "reward_type": "cashback_pct", "reward_rate": "2%"}]},
+    ]
+    findings = l4_numeric.run(cards, ctx())
+    assert any("FRACTION" in f.message for f in findings)
+    assert any("not a number" in f.message for f in findings)
+
+
+def test_gate_fails_closed_when_a_check_crashes(tmp_path):
+    # Data of a shape no check anticipates must yield FAIL, never a silent PASS.
+    bad = tmp_path / "cards.json"
+    bad.write_text(json.dumps(["not a card entry at all"]))
+    proc = subprocess.run([sys.executable, "gate.py", "--quiet", "--data", str(bad)],
+                          cwd=ROOT, capture_output=True, text=True)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "FAIL" in proc.stdout
+
+
+def test_gate_blocks_the_shipped_catalogue():
+    # The shipped catalogue contains known-bad rows (Altura 200% cashback,
+    # Scapia's "2%" string, zero base rates). The gate must block it.
     proc = subprocess.run([sys.executable, "gate.py", "--quiet"], cwd=ROOT,
                           capture_output=True, text=True)
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert "PASS" in proc.stdout
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "FAIL" in proc.stdout
 
 
 def test_finding_renders_readably():
